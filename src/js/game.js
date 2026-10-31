@@ -13,6 +13,16 @@ const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
 const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
 const GHOST_SPEED = 0.1;    // 1/10 celda/frame
 
+// Salida escalonada de la pen: frames de espera, en el mismo orden que GHOST_STARTS.
+const RELEASE_DELAYS = [ 0, 120, 240, 360 ];
+// Orden de desempate al elegir direccion: arriba, izquierda, abajo, derecha.
+const DIR_ORDER = [ 'up', 'left', 'down', 'right' ];
+// Caja de la pen (interior transitable) para forzar la salida hacia arriba.
+const PEN = { x0: 11, x1: 16, y0: 12, y1: 15 };
+// El shy persigue a mas de SHY_DISTANCE celdas y huye a SHY_CORNER si esta cerca.
+const SHY_DISTANCE = 8;
+const SHY_CORNER = { x: 1, y: 29 };
+
 // Crea una partida nueva. Copia MAZE (pristino) a game.grid para poder comer
 // dots sin destruir el original, y reiniciar.
 function createGame() {
@@ -27,6 +37,7 @@ function createGame() {
     state: 'start',
     score: 0,
     lives: 3,
+    frame: 0,
     dotsRemaining: dots,
     grid,
     pacman: {
@@ -36,12 +47,13 @@ function createGame() {
       nextDir: null,
       speed: PACMAN_SPEED,
     },
-    ghosts: GHOST_STARTS.map( ( g ) => ( {
+    ghosts: GHOST_STARTS.map( ( g, i ) => ( {
       x: g.x,
       y: g.y,
       dir: 'up',
       speed: GHOST_SPEED,
       kind: g.kind,
+      releaseAt: RELEASE_DELAYS[ i ],
     } ) ),
   };
 }
