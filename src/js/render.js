@@ -172,6 +172,7 @@ function draw( ctx, game, frame ) {
   drawDots( ctx, grid, frame );
   drawPacman( ctx, game.pacman, frame );
   game.ghosts.forEach( ( g ) => {
+    if ( g.state === 'eaten' ) return;
     let color = GHOST_COLORS[ g.kind ] || '#ff0000';
     if ( isFrightened( game, g ) ) {
       const remaining = g.frightenedUntil - game.frame;

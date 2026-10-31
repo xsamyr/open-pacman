@@ -15,6 +15,7 @@ const GHOST_SPEED = 0.1;    // 1/10 celda/frame
 const POWER_PELLET_POINTS = 50;
 const FRIGHTENED_FRAMES = 360;        // 6 s a 60 fps
 const FRIGHTENED_GHOST_SPEED = 0.05;  // la mitad de la velocidad normal
+const GHOST_EAT_POINTS = [ 200, 400, 800, 1600 ];
 
 // Salida escalonada de la pen: frames de espera, en el mismo orden que GHOST_STARTS.
 const RELEASE_DELAYS = [ 0, 120, 240, 360 ];
@@ -202,6 +203,8 @@ function decideGhost( game, g ) {
 }
 
 function moveGhost( game, g ) {
+  if ( g.state === 'eaten' ) return;
+
   const grid = game.grid;
   const width = grid[ 0 ].length;
   const speed = isFrightened( game, g ) ? FRIGHTENED_GHOST_SPEED : g.speed;
@@ -256,19 +259,32 @@ function collides( a, b ) {
 
 function update( game ) {
   game.frame++;
+
+  if ( game.frightenedUntil > 0 && game.frame >= game.frightenedUntil ) {
+    game.frightenedUntil = 0;
+    game.ghostCombo = 0;
+  }
+
   movePacman( game );
   game.ghosts.forEach( ( g ) => moveGhost( game, g ) );
 
   for ( const g of game.ghosts ) {
-    if ( collides( game.pacman, g ) ) {
-      game.lives--;
-      if ( game.lives <= 0 ) {
-        game.state = 'lost';
-        return;
-      }
-      resetPositions( game );
-      break;
+    if ( g.state === 'eaten' || !collides( game.pacman, g ) ) continue;
+
+    if ( isFrightened( game, g ) ) {
+      game.score += GHOST_EAT_POINTS[ Math.min( game.ghostCombo, 3 ) ];
+      game.ghostCombo++;
+      g.state = 'eaten';
+      continue;
     }
+
+    game.lives--;
+    if ( game.lives <= 0 ) {
+      game.state = 'lost';
+      return;
+    }
+    resetPositions( game );
+    break;
   }
 
   if ( game.dotsRemaining <= 0 ) game.state = 'won';
