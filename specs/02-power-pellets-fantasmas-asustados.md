@@ -1,6 +1,6 @@
 # SPEC 02 — Power pellets y fantasmas asustados
 
-> **Estado:** Draft
+> **Estado:** Approved
 > **Depende de:** SPEC 01
 > **Fecha:** 2026-10-30
 > **Objetivo:** Añadir 4 power pellets de una sola aparición por partida que vuelven vulnerables a los fantasmas durante 6 s, permiten comerlos por puntos y los hacen reaparecer en la pen a los 10 s.
