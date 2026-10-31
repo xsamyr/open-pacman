@@ -6,6 +6,9 @@ const WALL_COLOR = '#2121ff';
 const DOOR_COLOR = '#ffb8ff';
 const DOT_COLOR = '#ffb897';
 const POWER_PELLET_RADIUS = 5;
+const FLASH_FRAMES = 60;
+const FRIGHTENED_COLOR = '#3b3bff';
+const FRIGHTENED_FLASH_COLOR = '#ffffff';
 
 function cellCenter( x, y ) {
   return { cx: x * TILE + TILE / 2, cy: y * TILE + TILE / 2 };
@@ -168,7 +171,15 @@ function draw( ctx, game, frame ) {
   drawDoor( ctx, grid );
   drawDots( ctx, grid, frame );
   drawPacman( ctx, game.pacman, frame );
-  game.ghosts.forEach( ( g ) => drawGhost( ctx, g, GHOST_COLORS[ g.kind ] || '#ff0000' ) );
+  game.ghosts.forEach( ( g ) => {
+    let color = GHOST_COLORS[ g.kind ] || '#ff0000';
+    if ( isFrightened( game, g ) ) {
+      const remaining = g.frightenedUntil - game.frame;
+      const flashing = remaining <= FLASH_FRAMES && Math.floor( game.frame / 10 ) % 2 === 0;
+      color = flashing ? FRIGHTENED_FLASH_COLOR : FRIGHTENED_COLOR;
+    }
+    drawGhost( ctx, g, color );
+  } );
   drawHUD( ctx, game, W );
 }
 
