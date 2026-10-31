@@ -13,6 +13,7 @@ const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
 const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
 const GHOST_SPEED = 0.1;    // 1/10 celda/frame
 const POWER_PELLET_POINTS = 50;
+const FRIGHTENED_FRAMES = 360; // 6 s a 60 fps
 
 // Salida escalonada de la pen: frames de espera, en el mismo orden que GHOST_STARTS.
 const RELEASE_DELAYS = [ 0, 120, 240, 360 ];
@@ -40,6 +41,8 @@ function createGame() {
     lives: 3,
     frame: 0,
     dotsRemaining: dots,
+    frightenedUntil: 0,
+    ghostCombo: 0,
     grid,
     pacman: {
       x: PACMAN_START.x,
@@ -55,6 +58,8 @@ function createGame() {
       speed: GHOST_SPEED,
       kind: g.kind,
       releaseAt: RELEASE_DELAYS[ i ],
+      state: 'active',
+      frightenedUntil: 0,
     } ) ),
   };
 }
@@ -118,6 +123,13 @@ function movePacman( game ) {
       grid[ p.y ][ p.x ] = 0;
       game.score += tile === 4 ? POWER_PELLET_POINTS : 10;
       game.dotsRemaining--;
+      if ( tile === 4 ) {
+        game.frightenedUntil = game.frame + FRIGHTENED_FRAMES;
+        game.ghostCombo = 0;
+        for ( const g of game.ghosts ) {
+          if ( g.state === 'active' ) g.frightenedUntil = game.frightenedUntil;
+        }
+      }
     }
     // Si no puede seguir, se detiene en la celda.
     if ( !canMove( grid, p.x, p.y, p.dir, 'pacman' ) ) return;
