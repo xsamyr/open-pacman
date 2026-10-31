@@ -5,6 +5,7 @@ const TILE = 20;
 const WALL_COLOR = '#2121ff';
 const DOOR_COLOR = '#ffb8ff';
 const DOT_COLOR = '#ffb897';
+const POWER_PELLET_RADIUS = 5;
 
 function cellCenter( x, y ) {
   return { cx: x * TILE + TILE / 2, cy: y * TILE + TILE / 2 };
@@ -66,14 +67,18 @@ function drawDoor( ctx, grid ) {
   ctx.stroke();
 }
 
-function drawDots( ctx, grid ) {
+function drawDots( ctx, grid, frame ) {
   ctx.fillStyle = DOT_COLOR;
   for ( let y = 0; y < grid.length; y++ ) {
     for ( let x = 0; x < grid[ 0 ].length; x++ ) {
-      if ( grid[ y ][ x ] !== 2 ) continue;
+      const tile = grid[ y ][ x ];
+      if ( tile !== 2 && tile !== 4 ) continue;
       const { cx, cy } = cellCenter( x, y );
+      const radius = tile === 4
+        ? POWER_PELLET_RADIUS + Math.sin( frame * 0.15 ) * 1.5
+        : 2.5;
       ctx.beginPath();
-      ctx.arc( cx, cy, 2.5, 0, Math.PI * 2 );
+      ctx.arc( cx, cy, radius, 0, Math.PI * 2 );
       ctx.fill();
     }
   }
@@ -161,7 +166,7 @@ function draw( ctx, game, frame ) {
 
   drawWalls( ctx, grid );
   drawDoor( ctx, grid );
-  drawDots( ctx, grid );
+  drawDots( ctx, grid, frame );
   drawPacman( ctx, game.pacman, frame );
   game.ghosts.forEach( ( g ) => drawGhost( ctx, g, GHOST_COLORS[ g.kind ] || '#ff0000' ) );
   drawHUD( ctx, game, W );
