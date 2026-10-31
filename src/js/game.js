@@ -190,8 +190,9 @@ function moveGhost( game, g ) {
       g.x = Math.round( g.x );
       g.y = Math.round( g.y );
       g.dir = 'up';
+      // La puerta se cruza solo en este tramo (allowDoor).
+      if ( !canMove( grid, g.x, g.y, g.dir, 'ghost', true ) ) return;
     }
-    if ( !canMove( grid, g.x, g.y, g.dir, 'ghost', true ) ) return;
     const d = DIRS[ g.dir ];
     g.x += d.x * g.speed;
     g.y += d.y * g.speed;
@@ -222,6 +223,7 @@ function resetPositions( game ) {
     g.x = GHOST_STARTS[ i ].x;
     g.y = GHOST_STARTS[ i ].y;
     g.dir = 'up';
+    g.releaseAt = game.frame + RELEASE_DELAYS[ i ];
   } );
 }
 
@@ -230,6 +232,7 @@ function collides( a, b ) {
 }
 
 function update( game ) {
+  game.frame++;
   movePacman( game );
   game.ghosts.forEach( ( g ) => moveGhost( game, g ) );
 
