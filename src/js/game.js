@@ -15,6 +15,7 @@ const GHOST_SPEED = 0.1;    // 1/10 celda/frame
 const POWER_PELLET_POINTS = 50;
 const FRIGHTENED_FRAMES = 360;        // 6 s a 60 fps
 const FRIGHTENED_GHOST_SPEED = 0.05;  // la mitad de la velocidad normal
+const GHOST_RESPAWN_FRAMES = 600;     // 10 s a 60 fps
 const GHOST_EAT_POINTS = [ 200, 400, 800, 1600 ];
 
 // Salida escalonada de la pen: frames de espera, en el mismo orden que GHOST_STARTS.
@@ -60,8 +61,10 @@ function createGame() {
       speed: GHOST_SPEED,
       kind: g.kind,
       releaseAt: RELEASE_DELAYS[ i ],
+      home: { x: g.x, y: g.y },
       state: 'active',
       frightenedUntil: 0,
+      respawnAt: 0,
     } ) ),
   };
 }
@@ -245,12 +248,27 @@ function resetPositions( game ) {
   p.y = PACMAN_START.y;
   p.dir = 'left';
   p.nextDir = null;
+  game.frightenedUntil = 0;
+  game.ghostCombo = 0;
   game.ghosts.forEach( ( g, i ) => {
-    g.x = GHOST_STARTS[ i ].x;
-    g.y = GHOST_STARTS[ i ].y;
+    g.x = g.home.x;
+    g.y = g.home.y;
     g.dir = 'up';
     g.releaseAt = game.frame + RELEASE_DELAYS[ i ];
+    g.state = 'active';
+    g.frightenedUntil = 0;
+    g.respawnAt = 0;
   } );
+}
+
+function respawnGhost( game, g ) {
+  g.state = 'active';
+  g.x = g.home.x;
+  g.y = g.home.y;
+  g.dir = 'up';
+  g.releaseAt = game.frame;
+  g.frightenedUntil = 0;
+  g.respawnAt = 0;
 }
 
 function collides( a, b ) {
@@ -265,6 +283,10 @@ function update( game ) {
     game.ghostCombo = 0;
   }
 
+  for ( const g of game.ghosts ) {
+    if ( g.state === 'eaten' && game.frame >= g.respawnAt ) respawnGhost( game, g );
+  }
+
   movePacman( game );
   game.ghosts.forEach( ( g ) => moveGhost( game, g ) );
 
@@ -275,6 +297,7 @@ function update( game ) {
       game.score += GHOST_EAT_POINTS[ Math.min( game.ghostCombo, 3 ) ];
       game.ghostCombo++;
       g.state = 'eaten';
+      g.respawnAt = game.frame + GHOST_RESPAWN_FRAMES;
       continue;
     }
 
