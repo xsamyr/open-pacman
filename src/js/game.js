@@ -12,6 +12,11 @@ const OPPOSITE = { left: 'right', right: 'left', up: 'down', down: 'up' };
 
 const PACMAN_SPEED = 0.125; // 1/8 celda/frame -> alinea cada 8 frames
 const GHOST_SPEED = 0.1;    // 1/10 celda/frame
+const POWER_PELLET_POINTS = 50;
+const FRIGHTENED_FRAMES = 360;        // 6 s a 60 fps
+const FRIGHTENED_GHOST_SPEED = 0.05;  // la mitad de la velocidad normal
+const GHOST_RESPAWN_FRAMES = 600;     // 10 s a 60 fps
+const GHOST_EAT_POINTS = [ 200, 400, 800, 1600 ];
 
 // Salida escalonada de la pen: frames de espera, en el mismo orden que GHOST_STARTS.
 const RELEASE_DELAYS = [ 0, 120, 240, 360 ];
@@ -31,7 +36,7 @@ function createGame() {
   grid[ PACMAN_START.y ][ PACMAN_START.x ] = 0;
 
   let dots = 0;
-  for ( const row of grid ) for ( const v of row ) if ( v === 2 ) dots++;
+  for ( const row of grid ) for ( const v of row ) if ( v === 2 || v === 4 ) dots++;
 
   return {
     state: 'start',
@@ -39,6 +44,8 @@ function createGame() {
     lives: 3,
     frame: 0,
     dotsRemaining: dots,
+    frightenedUntil: 0,
+    ghostCombo: 0,
     grid,
     pacman: {
       x: PACMAN_START.x,
@@ -54,6 +61,10 @@ function createGame() {
       speed: GHOST_SPEED,
       kind: g.kind,
       releaseAt: RELEASE_DELAYS[ i ],
+      home: { x: g.x, y: g.y },
+      state: 'active',
+      frightenedUntil: 0,
+      respawnAt: 0,
     } ) ),
   };
 }
@@ -90,6 +101,10 @@ function inPen( g ) {
   return g.x >= PEN.x0 && g.x <= PEN.x1 && g.y >= PEN.y0 && g.y <= PEN.y1;
 }
 
+function isFrightened( game, g ) {
+  return g.state === 'active' && game.frame < g.frightenedUntil;
+}
+
 function wrapTunnel( a, width ) {
   if ( Math.round( a.y ) === TUNNEL_ROW ) {
     if ( a.x < 0 ) a.x += width;
@@ -111,11 +126,19 @@ function movePacman( game ) {
       p.dir = p.nextDir;
       p.nextDir = null;
     }
-    // Comer dot.
-    if ( grid[ p.y ][ p.x ] === 2 ) {
+    // Comer dot o power pellet.
+    const tile = grid[ p.y ][ p.x ];
+    if ( tile === 2 || tile === 4 ) {
       grid[ p.y ][ p.x ] = 0;
-      game.score += 10;
+      game.score += tile === 4 ? POWER_PELLET_POINTS : 10;
       game.dotsRemaining--;
+      if ( tile === 4 ) {
+        game.frightenedUntil = game.frame + FRIGHTENED_FRAMES;
+        game.ghostCombo = 0;
+        for ( const g of game.ghosts ) {
+          if ( g.state === 'active' ) g.frightenedUntil = game.frightenedUntil;
+        }
+      }
     }
     // Si no puede seguir, se detiene en la celda.
     if ( !canMove( grid, p.x, p.y, p.dir, 'pacman' ) ) return;
@@ -155,7 +178,10 @@ function ghostTarget( game, g ) {
 
 function decideGhost( game, g ) {
   const grid = game.grid;
-  const target = ghostTarget( game, g );
+  const frightened = isFrightened( game, g );
+  const target = frightened
+    ? { x: Math.round( game.pacman.x ), y: Math.round( game.pacman.y ) }
+    : ghostTarget( game, g );
 
   const options = DIR_ORDER.filter(
     ( dir ) => dir !== OPPOSITE[ g.dir ] && canMove( grid, g.x, g.y, dir, 'ghost', false )
@@ -163,15 +189,15 @@ function decideGhost( game, g ) {
   // Sin salida (callejon): permitir el giro de 180.
   const choices = options.length ? options : [ OPPOSITE[ g.dir ] ];
 
-  // DIR_ORDER ya fija el desempate: gana la primera direccion con distancia minima.
+  // DIR_ORDER ya fija el desempate: gana la primera direccion con distancia extrema.
   let best = choices[ 0 ];
-  let bestDist = Infinity;
+  let bestDist = frightened ? -Infinity : Infinity;
   for ( const dir of choices ) {
     const d = DIRS[ dir ];
     const nx = g.x + d.x;
     const ny = g.y + d.y;
     const dist = Math.abs( nx - target.x ) + Math.abs( ny - target.y );
-    if ( dist < bestDist ) {
+    if ( frightened ? dist > bestDist : dist < bestDist ) {
       bestDist = dist;
       best = dir;
     }
@@ -180,8 +206,11 @@ function decideGhost( game, g ) {
 }
 
 function moveGhost( game, g ) {
+  if ( g.state === 'eaten' ) return;
+
   const grid = game.grid;
   const width = grid[ 0 ].length;
+  const speed = isFrightened( game, g ) ? FRIGHTENED_GHOST_SPEED : g.speed;
 
   // Dentro de la pen: espera su turno y sale forzado hacia arriba.
   if ( inPen( g ) ) {
@@ -194,8 +223,8 @@ function moveGhost( game, g ) {
       if ( !canMove( grid, g.x, g.y, g.dir, 'ghost', true ) ) return;
     }
     const d = DIRS[ g.dir ];
-    g.x += d.x * g.speed;
-    g.y += d.y * g.speed;
+    g.x += d.x * speed;
+    g.y += d.y * speed;
     wrapTunnel( g, width );
     return;
   }
@@ -208,8 +237,8 @@ function moveGhost( game, g ) {
   }
 
   const d = DIRS[ g.dir ];
-  g.x += d.x * g.speed;
-  g.y += d.y * g.speed;
+  g.x += d.x * speed;
+  g.y += d.y * speed;
   wrapTunnel( g, width );
 }
 
@@ -219,12 +248,27 @@ function resetPositions( game ) {
   p.y = PACMAN_START.y;
   p.dir = 'left';
   p.nextDir = null;
+  game.frightenedUntil = 0;
+  game.ghostCombo = 0;
   game.ghosts.forEach( ( g, i ) => {
-    g.x = GHOST_STARTS[ i ].x;
-    g.y = GHOST_STARTS[ i ].y;
+    g.x = g.home.x;
+    g.y = g.home.y;
     g.dir = 'up';
     g.releaseAt = game.frame + RELEASE_DELAYS[ i ];
+    g.state = 'active';
+    g.frightenedUntil = 0;
+    g.respawnAt = 0;
   } );
+}
+
+function respawnGhost( game, g ) {
+  g.state = 'active';
+  g.x = g.home.x;
+  g.y = g.home.y;
+  g.dir = 'up';
+  g.releaseAt = game.frame;
+  g.frightenedUntil = 0;
+  g.respawnAt = 0;
 }
 
 function collides( a, b ) {
@@ -233,19 +277,37 @@ function collides( a, b ) {
 
 function update( game ) {
   game.frame++;
+
+  if ( game.frightenedUntil > 0 && game.frame >= game.frightenedUntil ) {
+    game.frightenedUntil = 0;
+    game.ghostCombo = 0;
+  }
+
+  for ( const g of game.ghosts ) {
+    if ( g.state === 'eaten' && game.frame >= g.respawnAt ) respawnGhost( game, g );
+  }
+
   movePacman( game );
   game.ghosts.forEach( ( g ) => moveGhost( game, g ) );
 
   for ( const g of game.ghosts ) {
-    if ( collides( game.pacman, g ) ) {
-      game.lives--;
-      if ( game.lives <= 0 ) {
-        game.state = 'lost';
-        return;
-      }
-      resetPositions( game );
-      break;
+    if ( g.state === 'eaten' || !collides( game.pacman, g ) ) continue;
+
+    if ( isFrightened( game, g ) ) {
+      game.score += GHOST_EAT_POINTS[ Math.min( game.ghostCombo, 3 ) ];
+      game.ghostCombo++;
+      g.state = 'eaten';
+      g.respawnAt = game.frame + GHOST_RESPAWN_FRAMES;
+      continue;
     }
+
+    game.lives--;
+    if ( game.lives <= 0 ) {
+      game.state = 'lost';
+      return;
+    }
+    resetPositions( game );
+    break;
   }
 
   if ( game.dotsRemaining <= 0 ) game.state = 'won';
