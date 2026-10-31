@@ -127,35 +127,56 @@ function movePacman( game ) {
   wrapTunnel( p, width );
 }
 
+// Objetivo (target) de cada fantasma segun su kind.
+function ghostTarget( game, g ) {
+  const p = game.pacman;
+  const px = Math.round( p.x );
+  const py = Math.round( p.y );
+  const pd = DIRS[ p.dir ] || { x: 0, y: 0 };
+
+  if ( g.kind === 'chaser' ) {
+    return { x: px, y: py };
+  }
+  if ( g.kind === 'ambusher' ) {
+    return { x: px + 4 * pd.x, y: py + 4 * pd.y };
+  }
+  if ( g.kind === 'flanker' ) {
+    const chaser = game.ghosts.find( ( h ) => h.kind === 'chaser' );
+    const pivot = { x: px + 2 * pd.x, y: py + 2 * pd.y };
+    const cx = chaser ? Math.round( chaser.x ) : px;
+    const cy = chaser ? Math.round( chaser.y ) : py;
+    return { x: 2 * pivot.x - cx, y: 2 * pivot.y - cy };
+  }
+  // shy: persigue de lejos, huye a la esquina cuando esta cerca.
+  const dist = Math.abs( Math.round( g.x ) - px ) + Math.abs( Math.round( g.y ) - py );
+  if ( dist > SHY_DISTANCE ) return { x: px, y: py };
+  return { x: SHY_CORNER.x, y: SHY_CORNER.y };
+}
+
 function decideGhost( game, g ) {
   const grid = game.grid;
-  const p = game.pacman;
+  const target = ghostTarget( game, g );
 
-  const options = Object.keys( DIRS ).filter(
-    ( dir ) => dir !== OPPOSITE[ g.dir ] && canMove( grid, g.x, g.y, dir, 'ghost' )
+  const options = DIR_ORDER.filter(
+    ( dir ) => dir !== OPPOSITE[ g.dir ] && canMove( grid, g.x, g.y, dir, 'ghost', false )
   );
   // Sin salida (callejon): permitir el giro de 180.
-  const choices = options.length ? options : [ '' + OPPOSITE[ g.dir ] ];
+  const choices = options.length ? options : [ OPPOSITE[ g.dir ] ];
 
-  if ( g.kind === 'hunter' ) {
-    const px = Math.round( p.x );
-    const py = Math.round( p.y );
-    let best = choices[ 0 ];
-    let bestDist = Infinity;
-    for ( const dir of choices ) {
-      const d = DIRS[ dir ];
-      const nx = g.x + d.x;
-      const ny = g.y + d.y;
-      const dist = Math.abs( nx - px ) + Math.abs( ny - py );
-      if ( dist < bestDist ) {
-        bestDist = dist;
-        best = dir;
-      }
+  // DIR_ORDER ya fija el desempate: gana la primera direccion con distancia minima.
+  let best = choices[ 0 ];
+  let bestDist = Infinity;
+  for ( const dir of choices ) {
+    const d = DIRS[ dir ];
+    const nx = g.x + d.x;
+    const ny = g.y + d.y;
+    const dist = Math.abs( nx - target.x ) + Math.abs( ny - target.y );
+    if ( dist < bestDist ) {
+      bestDist = dist;
+      best = dir;
     }
-    g.dir = best;
-  } else {
-    g.dir = choices[ Math.floor( Math.random() * choices.length ) ];
   }
+  g.dir = best;
 }
 
 function moveGhost( game, g ) {
